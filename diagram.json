@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "author": "Яковлюк Денис",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-breadboard-half", "id": "bb2", "top": -3, "left": 166, "attrs": {} },
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 9.6, "left": 4.84, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht1", "top": -172.5, "left": 196.2, "attrs": {} },
+    { "type": "wokwi-potentiometer", "id": "pot1", "top": -145.3, "left": 345.4, "attrs": {} },
+    {
+      "type": "wokwi-photoresistor-sensor",
+      "id": "ldr1",
+      "top": 41.6,
+      "left": -248.8,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "dht1:SDA", "esp:15", "green", [ "v38.4", "h-86.3", "v211.2" ] ],
+    [ "pot1:SIG", "esp:34", "blue", [ "v48", "h-394", "v105.6" ] ],
+    [ "ldr1:GND", "esp:GND.1", "black", [ "h48", "v38" ] ],
+    [ "esp:GND.2", "bb2:tn.1", "black", [ "h94.4" ] ],
+    [ "esp:3V3", "bb2:tp.1", "red", [ "h-4.61", "v-38.4", "h195.16" ] ],
+    [ "pot1:GND", "bb2:tn.16", "black", [ "v0" ] ],
+    [ "pot1:VCC", "bb2:tp.18", "red", [ "v0" ] ],
+    [ "dht1:GND", "bb2:tn.5", "black", [ "v0" ] ],
+    [ "dht1:VCC", "bb2:tp.2", "red", [ "v0" ] ],
+    [ "ldr1:AO", "esp:35", "gold", [ "h0" ] ],
+    [ "ldr1:VCC", "bb2:tp.4", "red", [ "h57.6", "v-105.6", "h249.6" ] ]
+  ],
+  "dependencies": {}
+}

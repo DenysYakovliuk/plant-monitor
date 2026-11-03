@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Моніторинг мікроклімату рослини</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: #f4f7f6; color: #333; padding: 30px; display: flex; flex-direction: column; align-items: center; }
+        h1 { margin-bottom: 8px; color: #2c3e50; }
+        .subtitle { color: #7f8c8d; margin-bottom: 20px; font-size: 0.95rem; }
+        .alerts-container { width: 100%; max-width: 950px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .alert-box { padding: 14px 18px; border-radius: 8px; font-size: 0.95rem; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+        .alert-danger { background-color: #fde8e8; color: #c81e1e; border-left: 5px solid #e02424; }
+        .alert-ok { background-color: #def7ec; color: #03543f; border-left: 5px solid #0e9f6e; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; width: 100%; max-width: 950px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border-top: 5px solid #bdc3c7; transition: all 0.3s ease; }
+        .card.temp { border-color: #e74c3c; }
+        .card.hum { border-color: #3498db; }
+        .card.soil { border-color: #2ecc71; }
+        .card.light { border-color: #f39c12; }
+        .card.critical { border-color: #e74c3c !important; background-color: #fff5f5; box-shadow: 0 0 10px rgba(231, 76, 60, 0.3); }
+        .card h3 { font-size: 1.1rem; color: #7f8c8d; margin-bottom: 12px; }
+        .value { font-size: 2.2rem; font-weight: bold; color: #2c3e50; }
+        .card.critical .value { color: #c81e1e; }
+        .unit { font-size: 1.1rem; font-weight: normal; color: #95a5a6; }
+
+        .settings-section {
+            background: white;
+            padding: 20px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 950px;
+            margin-top: 25px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+        .settings-title { font-size: 1.05rem; font-weight: 600; color: #2c3e50; }
+        .settings-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .settings-controls label { font-size: 0.9rem; color: #555; font-weight: 500; }
+        .settings-controls select {
+            padding: 6px 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            outline: none;
+            background: #fff;
+            cursor: pointer;
+        }
+        .btn-save {
+            background-color: #f39c12;
+            color: white;
+            border: none;
+            padding: 7px 18px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-save:hover { background-color: #d68910; }
+        .settings-status { font-size: 0.85rem; color: #27ae60; font-weight: 600; margin-left: 8px; }
+
+        .chart-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 950px;
+            margin-top: 20px;
+        }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .chart-header h2 { font-size: 1.25rem; color: #2c3e50; }
+        
+        .time-btn-group { display: flex; gap: 8px; }
+        .time-btn {
+            background-color: #edf2f7;
+            border: 1px solid #cbd5e0;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: #4a5568;
+            transition: all 0.2s ease;
+        }
+        .time-btn:hover { background-color: #e2e8f0; }
+        .time-btn.active { background-color: #2c3e50; color: white; border-color: #2c3e50; }
+
+        .footer { margin-top: 30px; color: #95a5a6; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <h1>IoT-станція моніторингу рослин</h1>
+    <p class="subtitle">Показники мікроклімату в режимі реального часу</p>
+
+    <div id="alertsContainer" class="alerts-container"></div>
+
+    <div class="grid">
+        <div class="card temp" id="cardTemp">
+            <h3>Температура</h3>
+            <div class="value"><span id="temp">--</span> <span class="unit">°C</span></div>
+        </div>
+        <div class="card hum" id="cardHum">
+            <h3>Вологість повітря</h3>
+            <div class="value"><span id="hum">--</span> <span class="unit">%</span></div>
+        </div>
+        <div class="card soil" id="cardSoil">
+            <h3>Вологість ґрунту</h3>
+            <div class="value"><span id="soil">--</span> <span class="unit">%</span></div>
+        </div>
+        <div class="card light" id="cardLight">
+            <h3>Освітленість</h3>
+            <div class="value"><span id="light">--</span> <span class="unit">%</span></div>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <div class="settings-title">⏰ Години надсилання сповіщень:</div>
+        <div class="settings-controls">
+            <label for="startHourSelect">З:</label>
+            <select id="startHourSelect"></select>
+            <label for="endHourSelect">До:</label>
+            <select id="endHourSelect"></select>
+            <button class="btn-save" onclick="saveAlertHours()">Зберегти</button>
+            <span id="saveStatus" class="settings-status"></span>
+        </div>
+    </div>
+
+    <div class="chart-section">
+        <div class="chart-header">
+            <h2 id="chartTitle">Динаміка за останню годину</h2>
+            <div class="time-btn-group">
+                <button class="time-btn active" id="btn1h" onclick="setTimeRange('1h')">1 година</button>
+                <button class="time-btn" id="btn24h" onclick="setTimeRange('24h')">24 години</button>
+            </div>
+        </div>
+        <canvas id="metricsChart" height="110"></canvas>
+    </div>
+
+    <div class="footer">
+        Останнє оновлення: <span id="time">очікування...</span>
+    </div>
+
+    <script>
+        const CRITICAL_THRESHOLDS = { SOIL_MIN: 30, LIGHT_MIN: 25 };
+        let currentRange = '1h';
+
+        const startSelect = document.getElementById('startHourSelect');
+        const endSelect = document.getElementById('endHourSelect');
+
+        for (let i = 0; i <= 23; i++) {
+            const label = (i < 10 ? '0' : '') + i + ':00';
+            const optStart = document.createElement('option');
+            optStart.value = String(i);
+            optStart.textContent = label;
+            startSelect.appendChild(optStart);
+
+            const optEnd = document.createElement('option');
+            optEnd.value = String(i);
+            optEnd.textContent = label;
+            endSelect.appendChild(optEnd);
+        }
+
+        async function loadAlertHours() {
+            try {
+                const res = await fetch('/api/settings');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.light_alert_start_hour !== undefined) {
+                        startSelect.value = String(data.light_alert_start_hour);
+                    }
+                    if (data.light_alert_end_hour !== undefined) {
+                        endSelect.value = String(data.light_alert_end_hour);
+                    }
+                }
+            } catch (err) {
+                console.error("Не вдалося завантажити налаштування годин:", err);
+            }
+        }
+
+        async function saveAlertHours() {
+            const startVal = parseInt(startSelect.value, 10);
+            const endVal = parseInt(endSelect.value, 10);
+            const statusEl = document.getElementById('saveStatus');
+
+            if (startVal >= endVal) {
+                statusEl.style.color = '#e02424';
+                statusEl.innerText = 'Початок має бути меншим за кінець!';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        light_alert_start_hour: startVal,
+                        light_alert_end_hour: endVal
+                    })
+                });
+
+                if (res.ok) {
+                    statusEl.style.color = '#27ae60';
+                    statusEl.innerText = 'Збережено!';
+                    setTimeout(() => { statusEl.innerText = ''; }, 3000);
+                } else {
+                    statusEl.style.color = '#e02424';
+                    statusEl.innerText = 'Помилка збереження';
+                }
+            } catch (err) {
+                statusEl.style.color = '#e02424';
+                statusEl.innerText = 'Помилка з\'єднання';
+            }
+        }
+
+        const ctx = document.getElementById('metricsChart').getContext('2d');
+        const metricsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Температура (°C)', data: [], borderColor: '#e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.1)', tension: 0.35, fill: false, pointRadius: 0, pointHoverRadius: 5 },
+                    { label: 'Вологість повітря (%)', data: [], borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.1)', tension: 0.35, fill: false, pointRadius: 0, pointHoverRadius: 5 },
+                    { label: 'Вологість ґрунту (%)', data: [], borderColor: '#2ecc71', backgroundColor: 'rgba(46, 204, 113, 0.1)', tension: 0.35, fill: false, pointRadius: 0, pointHoverRadius: 5 },
+                    { label: 'Освітленість (%)', data: [], borderColor: '#f39c12', backgroundColor: 'rgba(243, 156, 18, 0.1)', tension: 0.35, fill: false, pointRadius: 0, pointHoverRadius: 5 }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                    y: { beginAtZero: true, suggestedMax: 100, grid: { color: '#f0f0f0' } }
+                },
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        function setTimeRange(range) {
+            currentRange = range;
+            document.getElementById('btn1h').classList.toggle('active', range === '1h');
+            document.getElementById('btn24h').classList.toggle('active', range === '24h');
+
+            const title = range === '1h' ? 'Динаміка за останню годину' : 'Динаміка за останні 24 години';
+            document.getElementById('chartTitle').innerText = title;
+
+            updateChartData();
+        }
+
+        async function fetchMetrics() {
+            try {
+                const res = await fetch('/api/metrics');
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                document.getElementById('temp').innerText = data.temperature;
+                document.getElementById('hum').innerText = data.humidity;
+                document.getElementById('soil').innerText = data.soil_moisture;
+                document.getElementById('light').innerText = data.light_level;
+                document.getElementById('time').innerText = data.last_updated;
+
+                const soilCard = document.getElementById('cardSoil');
+                const lightCard = document.getElementById('cardLight');
+                const alertsContainer = document.getElementById('alertsContainer');
+                
+                alertsContainer.innerHTML = '';
+                let alerts = [];
+
+                if (data.soil_moisture !== "--") {
+                    const soilVal = Number(data.soil_moisture);
+                    if (soilVal < CRITICAL_THRESHOLDS.SOIL_MIN) {
+                        soilCard.classList.add('critical');
+                        alerts.push(`⚠️ <b>Низька вологість ґрунту (${soilVal}%)!</b> Рослину необхідно полити.`);
+                    } else {
+                        soilCard.classList.remove('critical');
+                    }
+                }
+
+                if (data.light_level !== "--") {
+                    const lightVal = Number(data.light_level);
+                    if (lightVal < CRITICAL_THRESHOLDS.LIGHT_MIN) {
+                        lightCard.classList.add('critical');
+                        alerts.push(`☀️ <b>Недостатньо світла (${lightVal}%)!</b> Переставте вазон у сонячніше місце.`);
+                    } else {
+                        lightCard.classList.remove('critical');
+                    }
+                }
+
+                if (alerts.length > 0) {
+                    alerts.forEach(msg => {
+                        const div = document.createElement('div');
+                        div.className = 'alert-box alert-danger';
+                        div.innerHTML = msg;
+                        alertsContainer.appendChild(div);
+                    });
+                } else if (data.soil_moisture !== "--") {
+                    const okDiv = document.createElement('div');
+                    okDiv.className = 'alert-box alert-ok';
+                    okDiv.innerHTML = '✅ <b>Усі показники в нормі!</b> Рослині комфортно.';
+                    alertsContainer.appendChild(okDiv);
+                }
+
+            } catch (err) {
+                console.error("Помилка отримання даних:", err);
+            }
+        }
+
+        async function updateChartData() {
+            try {
+                const res = await fetch(`/api/history?range=${currentRange}`);
+                if (!res.ok) return;
+                const history = await res.json();
+                
+                metricsChart.data.labels = history.map(item => item.time);
+                metricsChart.data.datasets[0].data = history.map(item => item.temperature);
+                metricsChart.data.datasets[1].data = history.map(item => item.humidity);
+                metricsChart.data.datasets[2].data = history.map(item => item.soil_moisture);
+                metricsChart.data.datasets[3].data = history.map(item => item.light_level);
+                metricsChart.update();
+            } catch (err) {
+                console.error("Помилка оновлення графіка:", err);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadAlertHours();
+            fetchMetrics();
+            updateChartData();
+        });
+
+        setInterval(fetchMetrics, 3000);
+        setInterval(updateChartData, 5000);
+    </script>
+</body>
+</html>
