@@ -30,7 +30,7 @@ ALERT_COOLDOWN = timedelta(minutes=cooldown_minutes)
 last_soil_alert = datetime.min
 last_light_alert = datetime.min
 
-DB_NAME = os.getenv("DB_NAME")
+DB_NAME = os.getenv("DB_NAME", "plant_monitor.db")
 
 latest_metrics = {
     "temperature": "--",
