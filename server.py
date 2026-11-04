@@ -186,10 +186,11 @@ def handle_telegram_command(chat_id: str, text: str):
             f"👋 <b>Привіт! Я бот моніторингу твоєї рослини.</b>\n\n"
             f"Я автоматично сповіщу тебе про критичні показники.\n\n"
             f"Щоб дізнатися про стан рослини натискай кнопку \n<b>📊 Отримати статус</b> внизу, або відправляй команду <code>/status</code>.\n\n"
-            f"Щоб переглянути поточні активні години натискай кнопку <b>⏰ Години сповіщень</b> внизу, або відправляй команду <code>/hours</code>.\n\n"
+            f"Щоб переглянути поточні активні години натискай кнопку \n<b>⏰ Години сповіщень</b> внизу, або відправляй команду <code>/hours</code>.\n\n"
             f"⚙️ <b>Команда зміни годин для сповіщень:</b>\n"
             f"<code>/set_hours ПОЧАТОК КІНЕЦЬ</code>\n"
-            f"<i>Приклад:</i> <code>/set_hours 8 20</code> (з 08:00 до 20:00)"
+            f"<i>Приклад:</i> <code>/set_hours 8 20</code> (з 08:00 до 20:00)\n"
+            f"<code>/set_hours 0 0</code> (цілодобово)\n"
         )
         send_telegram_alert(welcome_msg, target_chat_id=chat_id, reply_markup=STATUS_KEYBOARD)
 
@@ -199,6 +200,7 @@ def handle_telegram_command(chat_id: str, text: str):
             f"Сповіщення про вологість ґрунту та освітленість надсилаються лише в цьому інтервалі.\n\n"
             f"Щоб змінити, відправте команду: <code>/set_hours ПОЧАТОК КІНЕЦЬ</code>\n"
             f"<i>Приклад:</i> <code>/set_hours 8 20</code> (з 08:00 до 20:00)"
+            f"<code>/set_hours 0 0</code> (цілодобово)\n"
         )
         send_telegram_alert(msg, target_chat_id=chat_id, reply_markup=STATUS_KEYBOARD)
 
@@ -208,11 +210,16 @@ def handle_telegram_command(chat_id: str, text: str):
             try:
                 start_h = int(parts[1])
                 end_h = int(parts[2])
-                if 0 <= start_h <= 23 and 0 <= end_h <= 23 and start_h < end_h:
-                    update_alert_hours_in_db(start_h, end_h)
-                    msg = f"✅ Години сповіщень успішно оновлено:\n<b>з {start_h:02d}:00 до {end_h:02d}:00</b>"
+                if 0 <= start_h <= 23 and 0 <= end_h <= 24:
+                    end_saved = 0 if end_h == 24 else end_h
+                    update_alert_hours_in_db(start_h, end_saved)
+                    
+                    if start_h == end_saved or (start_h == 0 and end_h == 24):
+                        msg = "✅ Години сповіщень оновлено:\n<b>Сповіщення активні цілодобово (24/7)</b>"
+                    else:
+                        msg = f"✅ Години сповіщень успішно оновлено:\n<b>з {start_h:02d}:00 до {end_saved:02d}:00</b>"
                 else:
-                    msg = "⚠️ Помилка: години мають бути від 0 до 23, а година початку повинна бути меншою за годину кінця."
+                    msg = "⚠️ Помилка: години мають бути від 0 до 23 (<code>/set_hours 0 0</code> (цілодобові сповіщення))."
             except ValueError:
                 msg = "⚠️ Некоректні параметри! Приклад: <code>/set_hours 8 20</code>"
         else:
@@ -242,6 +249,17 @@ def telegram_polling_loop():
             time.sleep(2)
         time.sleep(0.5)
 
+def is_hour_in_alert_range(current_hour: int, start_h: int, end_h: int) -> bool:
+    end_norm = 0 if end_h == 24 else end_h
+
+    if start_h == end_norm or (start_h == 0 and end_h == 24):
+        return True
+    
+    if start_h < end_norm:
+        return start_h <= current_hour < end_norm
+    else:
+        return current_hour >= start_h or current_hour < end_norm
+
 @app.route('/')
 def dashboard():
     return render_template('index.html')
@@ -267,7 +285,7 @@ def receive_metrics():
 
         save_metric_to_db(time_str, temp, hum, soil, light)
 
-        is_alert_time = alert_start_hour <= now.hour < alert_end_hour
+        is_alert_time = is_hour_in_alert_range(now.hour, alert_start_hour, alert_end_hour)
 
         if is_alert_time and soil < SOIL_CRITICAL_THRESHOLD:
             if now - last_soil_alert > ALERT_COOLDOWN:
@@ -322,10 +340,12 @@ def update_settings():
         start_h = int(data.get("light_alert_start_hour"))
         end_h = int(data.get("light_alert_end_hour"))
 
-        if not (0 <= start_h <= 23 and 0 <= end_h <= 23 and start_h < end_h):
-            return jsonify({"error": "Години повинні бути від 0 до 23, а початок менший за кінець"}), 400
+        if not (0 <= start_h <= 23 and 0 <= end_h <= 24):
+            return jsonify({"error": "Години мають бути від 0 до 23 (кінцева година може бути 24)"}), 400
 
-        update_alert_hours_in_db(start_h, end_h)
+        end_saved = 0 if end_h == 24 else end_h
+        update_alert_hours_in_db(start_h, end_saved)
+
         return jsonify({
             "status": "success",
             "light_alert_start_hour": alert_start_hour,
