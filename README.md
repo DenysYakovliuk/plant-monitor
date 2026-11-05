@@ -126,7 +126,7 @@ def receive_metrics():
 
         save_metric_to_db(time_str, temp, hum, soil, light)
 
-        is_alert_time = alert_start_hour <= now.hour < alert_end_hour
+        is_alert_time = is_hour_in_alert_range(now.hour, alert_start_hour, alert_end_hour)
 
         # Перевірка критичного висихання ґрунту
         if is_alert_time and soil < SOIL_CRITICAL_THRESHOLD:
